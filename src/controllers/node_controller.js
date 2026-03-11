@@ -1,17 +1,19 @@
 const { query } = require('../db/pool');
 const { ok, fail } = require('../utils/response');
 
-// ─── Get nodes for a sector with player completion status ─────────────────────
+const MAX_CARROTS = 3;
+
+// ── Get nodes for a sector ────────────────────────────────────────────────────
 
 async function getNodes(req, res) {
-  const playerId   = req.player.sub;
+  const playerId    = req.player.sub;
   const { sectorCode } = req.params;
 
   try {
-    // Verify sector exists and player has access
     const { rows: sectorRows } = await query(
       `SELECT s.code, s.name, s.subtitle, s.unlock_after,
               COALESCE(np.completed_nodes, 0) AS completed_nodes,
+              COALESCE(np.carrots_used, 0)    AS carrots_used,
               s.total_nodes
        FROM sectors s
        LEFT JOIN node_progress np
@@ -24,7 +26,6 @@ async function getNodes(req, res) {
 
     const sector = sectorRows[0];
 
-    // Check unlock requirement
     if (sector.unlock_after) {
       const { rows: prereq } = await query(
         `SELECT np.completed_nodes, s.total_nodes
@@ -40,14 +41,8 @@ async function getNodes(req, res) {
       }
     }
 
-    // Fetch nodes with completion status
     const { rows: nodeRows } = await query(
-      `SELECT
-         n.id,
-         n.node_number,
-         n.difficulty,
-         n.sort_order,
-         nc.completed_at
+      `SELECT n.id, n.node_number, n.difficulty, n.sort_order, nc.completed_at
        FROM nodes n
        LEFT JOIN node_completions nc
          ON nc.node_id = n.id AND nc.player_id = $1
@@ -56,20 +51,17 @@ async function getNodes(req, res) {
       [playerId, sectorCode]
     );
 
-    // Determine which node is "current" (first incomplete node)
-    const completedIds = new Set(
-      nodeRows.filter(n => n.completed_at).map(n => n.id)
-    );
+    const completedIds = new Set(nodeRows.filter(n => n.completed_at).map(n => n.id));
     const firstIncompleteIndex = nodeRows.findIndex(n => !completedIds.has(n.id));
 
     const nodes = nodeRows.map((n, i) => ({
-      id:           n.id,
-      nodeNumber:   n.node_number,
-      difficulty:   n.difficulty,
-      isCompleted:  !!n.completed_at,
-      isCurrent:    i === firstIncompleteIndex,
-      isLocked:     firstIncompleteIndex !== -1 && i > firstIncompleteIndex,
-      completedAt:  n.completed_at,
+      id:          n.id,
+      nodeNumber:  n.node_number,
+      difficulty:  n.difficulty,
+      isCompleted: !!n.completed_at,
+      isCurrent:   i === firstIncompleteIndex,
+      isLocked:    firstIncompleteIndex !== -1 && i > firstIncompleteIndex,
+      completedAt: n.completed_at,
     }));
 
     return ok(res, {
@@ -81,6 +73,8 @@ async function getNodes(req, res) {
         completedNodes: sector.completed_nodes,
       },
       nodes,
+      carrotsRemaining: MAX_CARROTS - sector.carrots_used,
+      maxCarrots:       MAX_CARROTS,
     });
   } catch (err) {
     console.error('[Node/getNodes]', err.message);
@@ -88,7 +82,52 @@ async function getNodes(req, res) {
   }
 }
 
-// ─── Complete a node ──────────────────────────────────────────────────────────
+// ── Use a hint carrot ─────────────────────────────────────────────────────────
+
+async function useHint(req, res) {
+  const playerId    = req.player.sub;
+  const { sectorCode } = req.body;
+
+  if (!sectorCode) return fail(res, 'sectorCode is required', 400);
+
+  try {
+    await query(
+      `INSERT INTO node_progress (player_id, sector_code, completed_nodes, carrots_used, updated_at)
+       VALUES ($1, $2, 0, 0, NOW())
+       ON CONFLICT (player_id, sector_code) DO NOTHING`,
+      [playerId, sectorCode]
+    );
+
+    const { rows } = await query(
+      'SELECT carrots_used FROM node_progress WHERE player_id = $1 AND sector_code = $2',
+      [playerId, sectorCode]
+    );
+
+    const used = rows[0]?.carrots_used ?? 0;
+    if (used >= MAX_CARROTS) {
+      return fail(res, 'No carrots remaining for this sector', 400);
+    }
+
+    const { rows: updated } = await query(
+      `UPDATE node_progress
+       SET carrots_used = carrots_used + 1, updated_at = NOW()
+       WHERE player_id = $1 AND sector_code = $2
+       RETURNING carrots_used`,
+      [playerId, sectorCode]
+    );
+
+    return ok(res, {
+      carrotsUsed:      updated[0].carrots_used,
+      carrotsRemaining: MAX_CARROTS - updated[0].carrots_used,
+      maxCarrots:       MAX_CARROTS,
+    });
+  } catch (err) {
+    console.error('[Node/useHint]', err.message);
+    return fail(res, 'Internal server error', 500);
+  }
+}
+
+// ── Complete a node (node passed) ─────────────────────────────────────────────
 
 async function completeNode(req, res) {
   const playerId = req.player.sub;
@@ -97,7 +136,6 @@ async function completeNode(req, res) {
   if (!nodeId) return fail(res, 'nodeId is required', 400);
 
   try {
-    // Get the node and its sector
     const { rows: nodeRows } = await query(
       'SELECT id, sector_code, node_number FROM nodes WHERE id = $1',
       [nodeId]
@@ -106,7 +144,6 @@ async function completeNode(req, res) {
 
     const node = nodeRows[0];
 
-    // Record completion (ignore if already completed)
     await query(
       `INSERT INTO node_completions (player_id, node_id)
        VALUES ($1, $2)
@@ -114,7 +151,6 @@ async function completeNode(req, res) {
       [playerId, nodeId]
     );
 
-    // Update node_progress for the sector
     const { rows: countRows } = await query(
       `SELECT COUNT(*) AS completed_count
        FROM node_completions nc
@@ -125,15 +161,13 @@ async function completeNode(req, res) {
 
     const completedCount = parseInt(countRows[0].completed_count);
 
-    // Get total nodes in sector
     const { rows: totalRows } = await query(
       'SELECT total_nodes FROM sectors WHERE code = $1',
       [node.sector_code]
     );
-    const totalNodes  = totalRows[0].total_nodes;
-    const isComplete  = completedCount >= totalNodes;
+    const totalNodes = totalRows[0].total_nodes;
+    const isComplete = completedCount >= totalNodes;
 
-    // Upsert node_progress
     await query(
       `INSERT INTO node_progress (player_id, sector_code, completed_nodes, completed_at, updated_at)
        VALUES ($1, $2, $3, $4, NOW())
@@ -145,12 +179,23 @@ async function completeNode(req, res) {
       [playerId, node.sector_code, completedCount, isComplete ? new Date().toISOString() : null]
     );
 
+    // ── Increment streak on node completion ───────────────────────
+    const { rows: streakRows } = await query(
+      `UPDATE players
+       SET streak = streak + 1
+       WHERE id = $1
+       RETURNING streak`,
+      [playerId]
+    );
+    const newStreak = streakRows[0].streak;
+
     return ok(res, {
       nodeId,
       sectorCode:     node.sector_code,
       completedNodes: completedCount,
       totalNodes,
       sectorComplete: isComplete,
+      newStreak,
     });
   } catch (err) {
     console.error('[Node/completeNode]', err.message);
@@ -158,4 +203,26 @@ async function completeNode(req, res) {
   }
 }
 
-module.exports = { getNodes, completeNode };
+// ── Fail a node (node failed) ─────────────────────────────────────────────────
+
+async function failNode(req, res) {
+  const playerId = req.player.sub;
+
+  try {
+    // ── Reset streak on node failure ──────────────────────────────
+    const { rows } = await query(
+      `UPDATE players
+       SET streak = 0
+       WHERE id = $1
+       RETURNING streak`,
+      [playerId]
+    );
+
+    return ok(res, { newStreak: rows[0].streak });
+  } catch (err) {
+    console.error('[Node/failNode]', err.message);
+    return fail(res, 'Internal server error', 500);
+  }
+}
+
+module.exports = { getNodes, useHint, completeNode, failNode };

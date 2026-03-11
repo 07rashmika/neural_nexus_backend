@@ -3,7 +3,7 @@ const { query } = require('../db/pool');
 const { ok, fail } = require('../utils/response');
 
 const MAX_SHIELDS = 3;
-const SHIELD_REGEN_MS = 15 * 60 * 1000; // 15 minutes
+const SHIELD_REGEN_MS = 10 * 60 * 1000; // 10 minutes — must match game_controller & Flutter
 
 /**
  * Calculate regenerated shields since last_shield_lost_at.
@@ -172,4 +172,36 @@ function _format(row, shieldCount, lastShieldLostAt) {
   };
 }
 
-module.exports = { setupProfile, getProfile, consumeShield };
+async function updateUsername(req, res) {
+  const playerId      = req.player.sub;
+  const { username }  = req.body;
+
+  if (!username || username.trim().length < 3) {
+    return fail(res, 'Username must be at least 3 characters', 400);
+  }
+
+  const clean = username.trim().toLowerCase();
+
+  try {
+    // Check uniqueness
+    const { rows: existing } = await query(
+      'SELECT id FROM players WHERE username = $1 AND id != $2',
+      [clean, playerId]
+    );
+    if (existing.length > 0) {
+      return fail(res, 'Username already taken', 409);
+    }
+
+    await query(
+      'UPDATE players SET username = $1, updated_at = NOW() WHERE id = $2',
+      [clean, playerId]
+    );
+
+    return ok(res, { username: clean });
+  } catch (err) {
+    console.error('[Profile/updateUsername]', err.message);
+    return fail(res, 'Internal server error', 500);
+  }
+}
+
+module.exports = { setupProfile, getProfile, consumeShield, updateUsername };

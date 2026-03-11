@@ -9,6 +9,8 @@ const profileRoutes = require('./routes/profile_routes');
 const sectorRoutes = require('./routes/sector_routes');
 const nodeRoutes = require('./routes/node_routes');
 const gameRoutes = require('./routes/game_routes');
+const dailyRoutes = require('./routes/daily_challenge_routes');
+
 const { pool } = require('./db/pool');
 
 const app = express();
@@ -41,6 +43,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/sectors', sectorRoutes);
 app.use('/api/nodes', nodeRoutes);
 app.use('/api/game', gameRoutes);
+app.use('/api/daily', dailyRoutes);
 
 app.get('/health', async (req, res) => {
   try {
