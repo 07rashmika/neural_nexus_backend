@@ -1,13 +1,12 @@
 const { query } = require('../db/pool');
 const { ok, fail } = require('../utils/response');
 
-// ─── Get all sectors with player progress ────────────────────────────────────
-
+//get all sectors with player progress
 async function getSectors(req, res) {
   const playerId = req.player.sub;
 
   try {
-    // Fetch all sectors joined with this player's progress
+    //fetch all sectors joined with this player's progress
     const { rows } = await query(
       `SELECT
          s.code,
@@ -25,7 +24,7 @@ async function getSectors(req, res) {
       [playerId]
     );
 
-    // Build a set of fully completed sector codes for unlock logic
+    //build a set of fully completed sector codes for unlock logic
     const completedCodes = new Set(
       rows
         .filter(r => r.completed_nodes >= r.total_nodes)
@@ -67,8 +66,7 @@ async function getSectors(req, res) {
   }
 }
 
-// ─── Update node progress for a sector ──────────────────────────────────────
-
+//update node progress of a sector
 async function updateProgress(req, res) {
   const playerId = req.player.sub;
   const { sectorCode, completedNodes } = req.body;
@@ -78,7 +76,7 @@ async function updateProgress(req, res) {
   }
 
   try {
-    // Verify sector exists
+    //verify sector exists
     const { rows: sectorRows } = await query(
       'SELECT code, total_nodes, unlock_after FROM sectors WHERE code = $1',
       [sectorCode]
@@ -87,7 +85,7 @@ async function updateProgress(req, res) {
 
     const sector = sectorRows[0];
 
-    // Check unlock requirement
+    //check unlock requirement
     if (sector.unlock_after) {
       const { rows: prereq } = await query(
         `SELECT completed_nodes, total_nodes FROM node_progress np
@@ -105,7 +103,7 @@ async function updateProgress(req, res) {
     const clamped = Math.min(Math.max(0, completedNodes), sector.total_nodes);
     const isComplete = clamped >= sector.total_nodes;
 
-    // Upsert progress
+    //upsert progress
     const { rows } = await query(
       `INSERT INTO node_progress (player_id, sector_code, completed_nodes, completed_at, updated_at)
        VALUES ($1, $2, $3, $4, NOW())

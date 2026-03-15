@@ -17,8 +17,7 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
-// ─── Global Middleware ────────────────────────────────────────────────────────
-
+//global middleware
 app.use(cors({
   origin: process.env.ALLOWED_ORIGIN || '*',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
@@ -36,8 +35,6 @@ const authLimiter = rateLimit({
   message: { success: false, message: 'Too many requests. Please try again later.' },
 });
 
-// ─── Routes ──────────────────────────────────────────────────────────────────
-
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/sectors', sectorRoutes);
@@ -54,19 +51,18 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// 404 fallback
+//404 fallback
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
 });
 
-// Global error handler
+//global error handler
 app.use((err, req, res, _next) => {
   console.error('[Unhandled]', err);
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
-// ─── Start ────────────────────────────────────────────────────────────────────
-
+//start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server online on port ${PORT}`);
   console.log(`ENV: ${process.env.NODE_ENV || 'development'}`);

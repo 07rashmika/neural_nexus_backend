@@ -3,11 +3,11 @@ const { query } = require('../db/pool');
 const { ok, fail } = require('../utils/response');
 
 const MAX_SHIELDS = 3;
-const SHIELD_REGEN_MS = 10 * 60 * 1000; // 10 minutes — must match game_controller & Flutter
+const SHIELD_REGEN_MS = 10 * 60 * 1000;
 
 /**
- * Calculate regenerated shields since last_shield_lost_at.
- * Returns { shieldCount, lastShieldLostAt }
+ * Calculate regenerated shields since last loss
+ * returns shieldCount, lastShieldLostAt
  */
 function calcShields(currentShields, lastShieldLostAt) {
   if (currentShields >= MAX_SHIELDS || !lastShieldLostAt) {
@@ -31,8 +31,7 @@ function calcShields(currentShields, lastShieldLostAt) {
   return { shieldCount: newCount, lastShieldLostAt: newLastLostAt };
 }
 
-// ─── Setup Profile (one-time) ─────────────────────────────────────────────────
-
+//setup profile
 async function setupProfile(req, res) {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return fail(res, 'Validation failed', 422, errors.array());
@@ -79,8 +78,7 @@ async function setupProfile(req, res) {
   }
 }
 
-// ─── Get Profile ──────────────────────────────────────────────────────────────
-
+//get profile
 async function getProfile(req, res) {
   try {
     const { rows } = await query(
@@ -112,8 +110,7 @@ async function getProfile(req, res) {
   }
 }
 
-// ─── Consume Shield ───────────────────────────────────────────────────────────
-
+//consume shield
 async function consumeShield(req, res) {
   try {
     const { rows } = await query(
@@ -149,8 +146,7 @@ async function consumeShield(req, res) {
   }
 }
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
-
+//helper
 function _format(row, shieldCount, lastShieldLostAt) {
   return {
     id:               row.id,
@@ -183,7 +179,7 @@ async function updateUsername(req, res) {
   const clean = username.trim().toLowerCase();
 
   try {
-    // Check uniqueness
+    //check uniqueness
     const { rows: existing } = await query(
       'SELECT id FROM players WHERE username = $1 AND id != $2',
       [clean, playerId]

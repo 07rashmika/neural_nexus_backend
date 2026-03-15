@@ -3,8 +3,7 @@ const { ok, fail } = require('../utils/response');
 
 const MAX_CARROTS = 3;
 
-// ── Get nodes for a sector ────────────────────────────────────────────────────
-
+//get nodes for a sector
 async function getNodes(req, res) {
   const playerId    = req.player.sub;
   const { sectorCode } = req.params;
@@ -82,8 +81,7 @@ async function getNodes(req, res) {
   }
 }
 
-// ── Use a hint carrot ─────────────────────────────────────────────────────────
-
+//carrot hint
 async function useHint(req, res) {
   const playerId    = req.player.sub;
   const { sectorCode } = req.body;
@@ -127,8 +125,7 @@ async function useHint(req, res) {
   }
 }
 
-// ── Complete a node (node passed) ─────────────────────────────────────────────
-
+//pass a node
 async function completeNode(req, res) {
   const playerId = req.player.sub;
   const { nodeId } = req.body;
@@ -179,7 +176,7 @@ async function completeNode(req, res) {
       [playerId, node.sector_code, completedCount, isComplete ? new Date().toISOString() : null]
     );
 
-    // ── Increment streak on node completion ───────────────────────
+    //increment streak on node completion
     const { rows: streakRows } = await query(
       `UPDATE players
        SET streak = streak + 1
@@ -203,13 +200,12 @@ async function completeNode(req, res) {
   }
 }
 
-// ── Fail a node (node failed) ─────────────────────────────────────────────────
-
+//fail a node
 async function failNode(req, res) {
   const playerId = req.player.sub;
 
   try {
-    // ── Reset streak on node failure ──────────────────────────────
+    //reset streak on node failure
     const { rows } = await query(
       `UPDATE players
        SET streak = 0

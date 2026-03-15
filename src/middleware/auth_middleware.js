@@ -1,9 +1,7 @@
 const { verifyAccessToken } = require('../utils/jwt');
 const { fail } = require('../utils/response');
 
-/**
- * Middleware: verify Bearer token and attach decoded payload to req.player.
- */
+//middleware: verify Bearer token and attach decoded payload to req.player.
 function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
 
