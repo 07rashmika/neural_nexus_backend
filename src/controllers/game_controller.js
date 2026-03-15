@@ -1,4 +1,3 @@
-// src/controllers/game_controller.js
 const { pool } = require('../db/pool');
 
 const MAX_CHAIN = 5;
@@ -67,10 +66,9 @@ async function _recomputeShields(client, playerId) {
   return rows[0];
 }
 
-// ── POST /game/submit ─────────────────────────────────────────────────────────
-// Streak is NOT updated here — it is managed in node_controller:
-//   completeNode → streak++
-//   node failed  → streak reset to 0
+//streak will not updated here it will manage in node controller:
+//completeNode = streak++
+//node failed  = streak = 0
 async function submitRound(req, res) {
   const {
     round, answer, correct, time_taken, carrots_earned,
@@ -109,7 +107,7 @@ async function submitRound(req, res) {
     const levelUp      = newLevel > oldLevel;
     const newChainMult = Math.max(p.chain_mult, multiplier);
 
-    // streak is intentionally NOT updated here
+    //streak will intentionally not updated here
     await client.query(
       `UPDATE players
        SET intel_points = $1,
@@ -155,7 +153,7 @@ async function submitRound(req, res) {
       newChainMult: multiplier,
       newLevel,
       newPosition,
-      newStreak:    p.streak,   // return current streak unchanged
+      newStreak:    p.streak,   //return current streak unchanged
       levelUp,
     });
   } catch (err) {
@@ -167,7 +165,6 @@ async function submitRound(req, res) {
   }
 }
 
-// ── GET /game/shields ─────────────────────────────────────────────────────────
 async function getShieldStatus(req, res) {
   const playerId = req.player.sub;
   const client   = await pool.connect();
@@ -186,7 +183,7 @@ async function getShieldStatus(req, res) {
 }
 
 async function getLeaderboard(req, res) {
-  const currentPlayerId = req.player.sub; // highlight current player in UI
+  const currentPlayerId = req.player.sub; //highlight current player in UI
   try {
     const { rows } = await pool.query(
       `SELECT
@@ -221,7 +218,7 @@ async function getLeaderboard(req, res) {
   }
 }
 
-// ── GET /game/my-stats ────────────────────────────────────────────────────────
+//still not implemented in FE
 async function getMyStats(req, res) {
   const playerId = req.player.sub;
   try {

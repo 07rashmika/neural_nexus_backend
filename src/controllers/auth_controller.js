@@ -6,10 +6,9 @@ const { ok, fail } = require('../utils/response');
 
 const SALT_ROUNDS = parseInt(process.env.SALT_ROUNDS) || 12;
 
-// ─── Register ────────────────────────────────────────────────────────────────
-
+//register
 async function register(req, res) {
-  // Validate request body
+  //validate request body
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return fail(res, 'Validation failed', 422, errors.array());
@@ -18,7 +17,7 @@ async function register(req, res) {
   const { email, password, username } = req.body;
 
   try {
-    // Check for existing email or username
+    //checking existing email or username
     const existing = await query(
       'SELECT id FROM players WHERE email = $1 OR username = $2 LIMIT 1',
       [email.toLowerCase(), username]
@@ -28,10 +27,10 @@ async function register(req, res) {
       return fail(res, 'Email or username already taken', 409);
     }
 
-    // Hash password
+    //password hashing
     const hashed = await bcrypt.hash(password, SALT_ROUNDS);
 
-    // Insert player
+    //insert user
     const { rows } = await query(
       `INSERT INTO players (email, password, username)
        VALUES ($1, $2, $3)
@@ -63,8 +62,7 @@ async function register(req, res) {
   }
 }
 
-// ─── Login ───────────────────────────────────────────────────────────────────
-
+//login
 async function login(req, res) {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -83,7 +81,7 @@ async function login(req, res) {
     );
 
     if (rows.length === 0) {
-      // Generic message to avoid user enumeration
+      //message to avoid user enumeration
       return fail(res, 'Invalid credentials', 401);
     }
 
@@ -98,7 +96,7 @@ async function login(req, res) {
       return fail(res, 'Invalid credentials', 401);
     }
 
-    // Update last login timestamp
+    //update login timestamp
     await query(
       'UPDATE players SET last_login = NOW() WHERE id = $1',
       [player.id]
@@ -124,26 +122,4 @@ async function login(req, res) {
   }
 }
 
-// ─── Me (get current player from token) ──────────────────────────────────────
-
-async function me(req, res) {
-  try {
-    const { rows } = await query(
-      `SELECT id, email, username, status, last_login, created_at
-       FROM players WHERE id = $1 LIMIT 1`,
-      [req.player.sub]
-    );
-
-    if (rows.length === 0) {
-      return fail(res, 'Player not found', 404);
-    }
-
-    const player = rows[0];
-    return ok(res, { player });
-  } catch (err) {
-    console.error('[Auth/me]', err.message);
-    return fail(res, 'Internal server error', 500);
-  }
-}
-
-module.exports = { register, login, me };
+module.exports = { register, login };

@@ -1,18 +1,16 @@
-// src/controllers/daily_challenge_controller.js
 const { query } = require('../db/pool');
 const { ok, fail } = require('../utils/response');
 
 const PUZZLE_COUNT   = 5;
-const TIMER_SECONDS  = 12;   // strict — tighter than boss nodes
+const TIMER_SECONDS  = 12;
 const BONUS_CARROTS  = 10;
 
-// Today's date in UTC as a string YYYY-MM-DD
+//current date in UTC as a string YYYY-MM-DD
 function todayUTC() {
   return new Date().toISOString().slice(0, 10);
 }
 
-// ── GET /api/daily/status ─────────────────────────────────────────────────────
-// Returns whether the player has already attempted/completed today's challenge
+//check if player has already attempted the challenge
 async function getStatus(req, res) {
   const playerId = req.player.sub;
   const today    = todayUTC();
@@ -32,7 +30,7 @@ async function getStatus(req, res) {
 
     const attempt = attemptRows[0] ?? null;
 
-    // Seconds until midnight UTC (when next challenge unlocks)
+    //seconds until midnight - claude
     const now          = new Date();
     const midnight     = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
     const secondsUntilNext = Math.floor((midnight - now) / 1000);
@@ -57,8 +55,7 @@ async function getStatus(req, res) {
   }
 }
 
-// ── POST /api/daily/start ─────────────────────────────────────────────────────
-// Creates the attempt row — blocks if already attempted today
+//creates the attempt, blocks if already attempted today
 async function startChallenge(req, res) {
   const playerId = req.player.sub;
   const today    = todayUTC();
@@ -91,9 +88,7 @@ async function startChallenge(req, res) {
   }
 }
 
-// ── POST /api/daily/complete ──────────────────────────────────────────────────
-// Called when the gauntlet ends (pass or fail)
-// Body: { passed: bool, puzzlesPassed: int }
+//called when the gauntlet ends stating pass or fail
 async function completeChallenge(req, res) {
   const playerId              = req.player.sub;
   const today                 = todayUTC();
@@ -127,7 +122,7 @@ async function completeChallenge(req, res) {
     );
 
     if (passed) {
-      // Increment player's total daily_challenges_completed + award carrots
+      //increment player's total challenges completed + award carrots
       await query(
         `UPDATE players
          SET daily_challenges_completed = daily_challenges_completed + 1,
@@ -137,7 +132,7 @@ async function completeChallenge(req, res) {
       );
     }
 
-    // Fetch updated total
+    //fetch updated total
     const { rows: playerRows } = await query(
       `SELECT daily_challenges_completed, carrots FROM players WHERE id = $1`,
       [playerId]
